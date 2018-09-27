@@ -1,0 +1,135 @@
+import monitor.*;
+import java.util.Random;
+
+class Barberia extends AbstractMonitor{
+	
+	private Condition sem_barbero= makeCondition();
+	private Condition sem_salaespera= makeCondition();
+	private Condition sem_silla= makeCondition();
+	int numero_clientes=-1;
+	
+	// invcado por los clientes para cortarse el pelo
+	public void cortarPelo (int indice){
+		enter();
+			System.out.println("El cliente: "+indice+" entra a la barberia");
+			numero_clientes++;
+			if(numero_clientes>0){
+				System.out.println("El cliente: "+indice+" se espera en la sala de espera");
+				sem_salaespera.await();
+			}
+			else{
+				System.out.println("El cliente: "+indice+" despierta al barbero");
+				sem_barbero.signal();
+			}
+			System.out.println("El cliente: "+indice+" se sienta en la silla");
+			sem_silla.await();
+			System.out.println("El cliente: "+indice+" ha terminado de pelarse y se va");
+			
+		leave();	
+
+	}
+
+	// invocado por el barbero para esperar (si procede) a un nuevo cliente y sentarlo para el corte
+	public void siguienteCliente (){
+		enter();
+			// Si la sala de espera esta vacia y no hay nadie en la silla el barbero se duerme
+			if(numero_clientes<0){
+				System.out.println("No hay nadie en la barberia ni en la silla y el barbero se duerme");
+				sem_barbero.await();
+				
+			}
+			// Si no se cumple lo anterior 
+			else{
+				sem_salaespera.signal();
+								
+			}
+		leave();
+			
+	}
+	// invocado por el barbero para indicar que ha terminado de cortar el pelo
+	public void finCliente (){
+		enter();
+			numero_clientes--;
+			sem_silla.signal();
+		leave();
+	}
+}
+
+
+class Cliente implements Runnable{ 
+
+	public Thread thr;
+	Barberia barberia;
+	int indice;
+	
+	public Cliente(Barberia _barberia, int indice_hebra){
+		barberia=_barberia;
+		thr=new Thread(this,"Cliente ");
+		indice=indice_hebra;
+	}
+
+	public void run (){ 
+		try{
+			while (true) {
+				barberia.cortarPelo (indice); // el cliente espera (si procede) y se corta el pelo
+				aux.dormir_max( 2000 ); // el cliente está fuera de la barberia un tiempo
+			}
+		}
+		catch(Exception e){
+            		System.err.println("Excepcion en cliente: " + e);
+        	}
+	}
+}
+
+class Barbero implements Runnable{ 
+	
+	public Thread thr;
+	Barberia barberia;
+
+	public Barbero(Barberia _barberia){
+		barberia=_barberia;
+		thr=new Thread(this,"Barbero ");
+	}
+	public void run (){ 
+		try{
+			while (true) {
+				barberia.siguienteCliente ();
+				aux.dormir_max( 2500 ); // el barbero está cortando el pelo
+				barberia.finCliente ();
+			}
+		}
+		catch(Exception e){
+            		System.err.println("Excepcion en barbero: " + e);
+        	}
+	}
+}
+
+class aux{
+	static Random genAlea = new Random() ;
+	static void dormir_max( int milisecsMax ){ 
+		try{ 
+			Thread.sleep( genAlea.nextInt( milisecsMax ) ) ;
+		}
+		catch( InterruptedException e ){ 
+			System.err.println("sleep interumpido en ’aux.dormir_max()’");
+		}
+	}
+}
+
+class MainBarbero { 
+  public static void main( String[] args ){
+	int n_clientes=3;
+	Barberia barberia = new Barberia();
+        Barbero barbero = new Barbero(barberia);
+        Cliente[] clientes = new Cliente[n_clientes];
+	barbero.thr.start();
+	for(int i=0; i<n_clientes; i++){
+  		clientes[i]= new Cliente(barberia,i);
+       }
+
+	for(int i=0; i<n_clientes; i++){
+  		clientes[i].thr.start();
+       }
+	
+  }
+}
